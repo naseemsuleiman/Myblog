@@ -1,3 +1,35 @@
+.reply-input-container {
+    transition: all 0.3s ease;
+    background-color: #f8fafc;
+    border-left: 2px solid #0d9488;
+  }
+  
+  
+  .reply-confirmation {
+    font-size: 0.65rem;
+    color: #64748b;
+    font-style: italic;
+  }
+  
+  /* Smooth transitions for reply states */
+  .comment-container {
+    transition: background-color 0.2s ease;
+  }
+  
+  .reply-indicator {
+    border-left-width: 2px;
+    border-left-color: #0d9488;
+    background-color: #f0fdfa;
+  }
+  
+  .reply-confirmation {
+    font-size: 0.65rem;
+    color: #64748b;
+  }
+
+
 @tailwind base; 
 @tailwind components; 
 @tailwind utilities;
+
+

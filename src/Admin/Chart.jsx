@@ -37,7 +37,6 @@ const Chart = () => {
     likes: []
   });
 
-  
   const colors = {
     primary: {
       light: '#e6f7f5',
@@ -57,13 +56,13 @@ const Chart = () => {
       try {
         const now = new Date();
         let startDate = new Date();
-        
+
         switch (timeRange) {
           case 'week':
             startDate.setDate(now.getDate() - 7);
             break;
           case 'month':
-            startDate.setMonth(now.getMonth() - 1);
+            startDate.setDate(now.getDate() - 30);
             break;
           case 'year':
             startDate.setFullYear(now.getFullYear() - 1);
@@ -126,34 +125,35 @@ const Chart = () => {
 
   const groupByTimePeriod = (data, period) => {
     const groups = {};
-    
+
     data.forEach(item => {
       const date = item.timestamp || item.createdAt;
       let key;
-      
+
       if (period === 'day') {
         key = date.toLocaleDateString();
       } else if (period === 'week') {
         const weekNumber = Math.floor(date.getDate() / 7);
-        key = `Week ${weekNumber + 1} of ${date.toLocaleString('default', { month: 'long' })}`;
+        key = `Week ${weekNumber + 1}`;
       } else if (period === 'month') {
-        key = date.toLocaleString('default', { month: 'long' });
+        const weekNumber = Math.floor((date.getDate() - 1) / 7);
+        key = `Week ${weekNumber + 1}`;
       }
-      
+
       if (!groups[key]) {
         groups[key] = 0;
       }
       groups[key]++;
     });
-    
+
     return groups;
   };
 
   const prepareChartData = () => {
-    const userSignups = groupByTimePeriod(stats.users, timeRange === 'year' ? 'month' : 'day');
-    const postsCreated = groupByTimePeriod(stats.posts, timeRange === 'year' ? 'month' : 'day');
-    const commentsPosted = groupByTimePeriod(stats.comments, timeRange === 'year' ? 'month' : 'day');
-    
+    const userSignups = groupByTimePeriod(stats.users, timeRange === 'year' ? 'month' : (timeRange === 'month' ? 'month' : 'day'));
+    const postsCreated = groupByTimePeriod(stats.posts, timeRange === 'year' ? 'month' : (timeRange === 'month' ? 'month' : 'day'));
+    const commentsPosted = groupByTimePeriod(stats.comments, timeRange === 'year' ? 'month' : (timeRange === 'month' ? 'month' : 'day'));
+
     const categories = {};
     stats.posts.forEach(post => {
       const category = post.category || 'Uncategorized';
@@ -162,7 +162,7 @@ const Chart = () => {
       }
       categories[category]++;
     });
-    
+
     return {
       userSignups,
       postsCreated,
@@ -334,8 +334,6 @@ const Chart = () => {
             </select>
           </div>
         </div>
-
-        
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
           <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100 hover:shadow-md transition-shadow">

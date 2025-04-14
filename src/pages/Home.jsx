@@ -56,35 +56,54 @@ function Home() {
   const [notifications, setNotifications] = useState([]);
   const [activeTab, setActiveTab] = useState('all');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const { user } = useAuth();
-  const navigate = useNavigate();
+  const [error, setError] = useState(null);
   const [replyToComment, setReplyToComment] = useState(null);
   const [replyContent, setReplyContent] = useState('');
+  const { user } = useAuth();
+  const navigate = useNavigate();
 
   const POSTS_PER_PAGE = 5;
 
   const ViewTracker = ({ postId }) => {
-    const [hasViewed, setHasViewed] = useState(false);
-    
+    const [isTracked, setIsTracked] = useState(false);
+    const user = auth.currentUser;
+  
     useEffect(() => {
-      if (hasViewed || !postId || !user) return;
-      
-      const timer = setTimeout(async () => {
+      if (!user?.uid || !postId || isTracked) return;
+  
+      const trackView = async () => {
         try {
-          const postRef = doc(db, 'posts', postId);
+          const postRef = doc(db, 'published', postId);
+          const postSnap = await getDoc(postRef);
+  
+          if (!postSnap.exists()) {
+            console.warn('Post does not exist:', postId);
+            return;
+          }
+  
+          const postData = postSnap.data();
+          const viewedBy = postData.viewedBy || [];
+  
+          if (viewedBy.includes(user.uid)) {
+            setIsTracked(true);
+            return;
+          }
+  
           await updateDoc(postRef, {
             views: increment(1),
-            viewedBy: arrayUnion(user.uid)
+            viewedBy: arrayUnion(user.uid),
           });
-          setHasViewed(true);
+  
+          setIsTracked(true);
         } catch (error) {
           console.error('Error tracking view:', error);
         }
-      }, 3000);
-      
+      };
+  
+      const timer = setTimeout(trackView, 5000);
       return () => clearTimeout(timer);
-    }, [postId, user?.uid, hasViewed]);
-
+    }, [postId, user?.uid, isTracked]);
+  
     return null;
   };
 
@@ -97,32 +116,58 @@ function Home() {
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(async (authUser) => {
       if (authUser) {
-        const userDoc = await getDoc(doc(db, 'users', authUser.uid));
-        if (userDoc.exists()) {
-          setCurrentUsername(userDoc.data().username);
-          setFollowedUsers(userDoc.data().following || []);
-          const notificationsQuery = query(collection(db, 'users', authUser.uid, 'notifications'), orderBy('timestamp', 'desc'));
-          const notificationsUnsubscribe = onSnapshot(notificationsQuery, (snapshot) => {
-            const notificationData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            setNotifications(notificationData);
-          });
-          return () => { notificationsUnsubscribe() };
-        } else {
-          setCurrentUsername('User');
+        try {
+          const userDoc = await getDoc(doc(db, 'users', authUser.uid));
+          if (userDoc.exists()) {
+            setCurrentUsername(userDoc.data().username);
+            setFollowedUsers(userDoc.data().following || []);
+
+            const notificationsQuery = query(
+              collection(db, 'users', authUser.uid, 'notifications'),
+              orderBy('timestamp', 'desc')
+            );
+
+            const notificationsUnsubscribe = onSnapshot(
+              notificationsQuery,
+              (snapshot) => {
+                const notificationData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                setNotifications(notificationData);
+              },
+              (error) => {
+                console.error('Error fetching notifications:', error);
+                setError('Failed to load notifications');
+              }
+            );
+
+            return () => notificationsUnsubscribe();
+          } else {
+            setCurrentUsername('User');
+          }
+        } catch (error) {
+          console.error('Error fetching user data:', error);
+          setError('Failed to load user data');
         }
       } else {
         setCurrentUsername('');
         setFollowedUsers([]);
       }
     });
+
     return () => unsubscribe();
   }, []);
 
   useEffect(() => {
-    let unsubscribePosts = () => { };
+    let unsubscribePosts = () => {};
+    setError(null);
 
     const setupPostsListener = async () => {
-      unsubscribePosts = await fetchPosts();
+      try {
+        unsubscribePosts = await fetchPosts();
+      } catch (error) {
+        console.error('Error setting up posts listener:', error);
+        setError('Failed to load posts');
+        setLoading(false);
+      }
     };
 
     setupPostsListener();
@@ -136,35 +181,12 @@ function Home() {
     setLoading(true);
     let q;
 
-    if (activeTab === 'following' && user && followedUsers.length > 0) {
-      q = query(
-        collection(db, 'posts'),
-        where('userId', 'in', followedUsers),
-        orderBy(sortOption, 'desc'),
-        limit(POSTS_PER_PAGE)
-      );
-    } else if (selectedCategory) {
-      q = query(
-        collection(db, 'posts'),
-        where('category', '==', selectedCategory),
-        orderBy(sortOption, 'desc'),
-        limit(POSTS_PER_PAGE)
-      );
-    } else {
-      q = query(
-        collection(db, 'posts'),
-        orderBy(sortOption, 'desc'),
-        limit(POSTS_PER_PAGE)
-      );
-    }
-
-    if (lastVisible) {
+    try {
       if (activeTab === 'following' && user && followedUsers.length > 0) {
         q = query(
           collection(db, 'posts'),
           where('userId', 'in', followedUsers),
           orderBy(sortOption, 'desc'),
-          startAfter(lastVisible),
           limit(POSTS_PER_PAGE)
         );
       } else if (selectedCategory) {
@@ -172,68 +194,119 @@ function Home() {
           collection(db, 'posts'),
           where('category', '==', selectedCategory),
           orderBy(sortOption, 'desc'),
-          startAfter(lastVisible),
           limit(POSTS_PER_PAGE)
         );
       } else {
         q = query(
           collection(db, 'posts'),
           orderBy(sortOption, 'desc'),
-          startAfter(lastVisible),
           limit(POSTS_PER_PAGE)
         );
       }
-    }
 
-    const unsubscribe = onSnapshot(q, async (snapshot) => {
-      const postList = snapshot.docs.map((docElement) => ({
-        id: docElement.id,
-        ...docElement.data(),
-        views: docElement.data().views || 0,
-        viewedBy: docElement.data().viewedBy || []
-      }));
-
-      if (snapshot.docs.length < POSTS_PER_PAGE) {
-        setHasMore(false);
-      } else {
-        setLastVisible(snapshot.docs[snapshot.docs.length - 1]);
+      if (lastVisible) {
+        if (activeTab === 'following' && user && followedUsers.length > 0) {
+          q = query(
+            collection(db, 'posts'),
+            where('userId', 'in', followedUsers),
+            orderBy(sortOption, 'desc'),
+            startAfter(lastVisible),
+            limit(POSTS_PER_PAGE)
+          );
+        } else if (selectedCategory) {
+          q = query(
+            collection(db, 'posts'),
+            where('category', '==', selectedCategory),
+            orderBy(sortOption, 'desc'),
+            startAfter(lastVisible),
+            limit(POSTS_PER_PAGE)
+          );
+        } else {
+          q = query(
+            collection(db, 'posts'),
+            orderBy(sortOption, 'desc'),
+            startAfter(lastVisible),
+            limit(POSTS_PER_PAGE)
+          );
+        }
       }
 
-      const userIds = postList.map((post) => post.userId);
-      const uniqueUserIds = [...new Set(userIds)];
-
-      if (uniqueUserIds.length > 0) {
-        const usersQuery = query(collection(db, 'users'), where('__name__', 'in', uniqueUserIds));
-        const usersSnapshot = await getDocs(usersQuery);
-        const userMap = {};
-        usersSnapshot.forEach((userDoc) => {
-          userMap[userDoc.id] = userDoc.data().username || 'Anonymous';
-        });
-
-        const postsWithUsernames = postList.map((post) => ({
-          ...post,
-          userName: userMap[post.userId],
-        }));
-
-        setPosts((prevPosts) => {
-          if (lastVisible) {
-            const combined = [...prevPosts, ...postsWithUsernames];
-            return combined.filter((post, index, self) =>
-              index === self.findIndex((p) => p.id === post.id)
-            );
-          } else {
-            return postsWithUsernames;
+      const unsubscribe = onSnapshot(q,
+        async (snapshot) => {
+          if (snapshot.empty) {
+            setHasMore(false);
+            setLoading(false);
+            return;
           }
-        });
-      } else {
-        setPosts(postList);
-      }
 
+          const postList = snapshot.docs.map((docElement) => ({
+            id: docElement.id,
+            ...docElement.data(),
+            views: docElement.data().views || 0,
+            viewedBy: docElement.data().viewedBy || []
+          }));
+
+          if (snapshot.docs.length < POSTS_PER_PAGE) {
+            setHasMore(false);
+          } else {
+            setLastVisible(snapshot.docs[snapshot.docs.length - 1]);
+          }
+
+          const userIds = postList.map((post) => post.userId);
+          const uniqueUserIds = [...new Set(userIds)];
+
+          if (uniqueUserIds.length > 0) {
+            try {
+              const usersQuery = query(collection(db, 'users'), where('__name__', 'in', uniqueUserIds));
+              const usersSnapshot = await getDocs(usersQuery);
+              const userMap = {};
+
+              usersSnapshot.forEach((userDoc) => {
+                userMap[userDoc.id] = userDoc.data().username || 'Anonymous';
+              });
+
+              const postsWithUsernames = postList.map((post) => ({
+                ...post,
+                userName: userMap[post.userId],
+              }));
+
+              setPosts((prevPosts) => {
+                if (lastVisible) {
+                  const combined = [...prevPosts, ...postsWithUsernames];
+                  return combined.filter((post, index, self) =>
+                    index === self.findIndex((p) => p.id === post.id)
+                  );
+                } else {
+                  return postsWithUsernames;
+                }
+              });
+            } catch (error) {
+              console.error('Error fetching usernames:', error);
+              setPosts(postList);
+            }
+          } else {
+            setPosts(postList);
+          }
+
+          setLoading(false);
+          setFetchingMore(false);
+        },
+        (error) => {
+          console.error('Error in posts snapshot:', error);
+          setError('Failed to load posts');
+          setLoading(false);
+          setFetchingMore(false);
+        }
+      );
+
+      return unsubscribe;
+    } catch (error) {
+      console.error('Error setting up posts query:', error);
+      setError('Failed to load posts');
       setLoading(false);
       setFetchingMore(false);
-    });
-
-    return unsubscribe;
+      return () => {};
+    }
   };
 
   const fetchMorePosts = () => {
@@ -312,11 +385,11 @@ function Home() {
         prevPosts.map(post =>
           post.id === postId
             ? {
-                ...post,
-                likes: isLiked
-                  ? post.likes.filter(id => id !== user.uid)
-                  : [...(post.likes || []), user.uid]
-              }
+              ...post,
+              likes: isLiked
+                ? post.likes.filter(id => id !== user.uid)
+                : [...(post.likes || []), user.uid]
+            }
             : post
         )
       );
@@ -350,7 +423,7 @@ function Home() {
         userId: user.uid,
         text: comment,
         userName: currentUsername,
-        timestamp: new Date()
+        timestamp: serverTimestamp()
       };
 
       const postRef = doc(db, 'posts', postId);
@@ -386,60 +459,6 @@ function Home() {
       }
     } else {
       alert('You can only delete your own posts.');
-    }
-  };
-
-  const handleShare = async (postId) => {
-    if (!user) return;
-    const post = posts.find(p => p.id === postId);
-
-    try {
-      await addDoc(collection(db, 'users', post.userId, 'notifications'), {
-        type: 'share',
-        fromUserId: user.uid,
-        fromUsername: currentUsername,
-        postId: postId,
-        postTitle: post.title,
-        timestamp: serverTimestamp()
-      });
-
-      alert('Post shared successfully!');
-    } catch (error) {
-      console.error('Error sharing post:', error);
-    }
-  };
-
-  const handleSave = async (postId) => {
-    if (!user) return;
-    const post = posts.find(p => p.id === postId);
-
-    try {
-      const userDoc = await getDoc(doc(db, 'users', user.uid));
-      const savedPosts = userDoc.data()?.savedPosts || [];
-      const isSaved = savedPosts.includes(postId);
-
-      if (isSaved) {
-        await updateDoc(doc(db, 'users', user.uid), {
-          savedPosts: arrayRemove(postId)
-        });
-      } else {
-        await updateDoc(doc(db, 'users', user.uid), {
-          savedPosts: arrayUnion(postId)
-        });
-
-        if (post.userId !== user.uid) {
-          await addDoc(collection(db, 'users', post.userId, 'notifications'), {
-            type: 'save',
-            fromUserId: user.uid,
-            fromUsername: currentUsername,
-            postId: postId,
-            postTitle: post.title,
-            timestamp: serverTimestamp()
-          });
-        }
-      }
-    } catch (error) {
-      console.error('Error saving post:', error);
     }
   };
 
@@ -486,14 +505,42 @@ function Home() {
 
   const handleDeleteComment = async (postId, commentToDelete) => {
     if (!user) return;
-    const postRef = doc(db, 'posts', postId);
-    const postDoc = await getDoc(postRef);
-    if (!postDoc.exists()) return;
-
+    
+    if (commentToDelete.userId !== user.uid && !posts.find(p => p.id === postId)?.userId === user.uid) {
+      alert("You can only delete your own comments or comments on your posts");
+      return;
+    }
+  
     try {
+      const postRef = doc(db, 'posts', postId);
+      const postDoc = await getDoc(postRef);
+      
+      if (!postDoc.exists()) return;
+  
+      const currentComments = postDoc.data().comments || [];
+      const commentIndex = currentComments.findIndex(c => 
+        c.timestamp?.toDate?.()?.getTime() === commentToDelete.timestamp?.toDate?.()?.getTime() &&
+        c.userId === commentToDelete.userId &&
+        c.text === commentToDelete.text
+      );
+  
+      if (commentIndex === -1) {
+        console.error("Comment not found for deletion");
+        return;
+      }
+  
+      const updatedComments = [...currentComments];
+      updatedComments.splice(commentIndex, 1);
+  
       await updateDoc(postRef, {
-        comments: arrayRemove(commentToDelete)
+        comments: updatedComments
       });
+  
+      setPosts(posts.map(post => 
+        post.id === postId 
+          ? { ...post, comments: updatedComments }
+          : post
+      ));
     } catch (error) {
       console.error('Error deleting comment:', error);
     }
@@ -501,54 +548,114 @@ function Home() {
 
   const handleReply = async (postId, parentComment) => {
     if (!user || !replyContent.trim()) return;
-    const postRef = doc(db, 'posts', postId);
-
+  
     try {
+     
       const newReply = {
         userId: user.uid,
-        text: replyContent,
         userName: currentUsername,
-        timestamp: new Date(),
-        parentCommentId: parentComment.timestamp?.toDate().getTime() || Date.now(),
-        isReply: true
+        text: replyContent,
+        parentCommentId: parentComment.timestamp?.toDate 
+          ? parentComment.timestamp.toDate().getTime() 
+          : parentComment.timestamp,
+        isReply: true,
+        repliedTo: {
+          userId: parentComment.userId,
+          userName: parentComment.userName
+        }
       };
-
+  
+      const postRef = doc(db, 'posts', postId);
+      
+     
       await updateDoc(postRef, {
-        comments: arrayUnion(newReply)
+        comments: arrayUnion({
+          ...newReply,
+          timestamp: new Date() 
+        })
       });
-
+  
+      
+      const postDoc = await getDoc(postRef);
+      const comments = postDoc.data().comments || [];
+      const replyIndex = comments.findIndex(c => 
+        c.text === newReply.text && 
+        c.userId === newReply.userId &&
+        !c.timestamp?.seconds
+      );
+  
+      if (replyIndex !== -1) {
+        const replyPath = `comments.${replyIndex}.timestamp`;
+        await updateDoc(postRef, {
+          [replyPath]: serverTimestamp()
+        });
+      }
+  
+     
+      setPosts(posts.map(post => 
+        post.id === postId
+          ? { 
+              ...post, 
+              comments: [...(post.comments || []), {
+                ...newReply,
+                timestamp: serverTimestamp() 
+              }] 
+            }
+          : post
+      ));
+  
+      
       if (parentComment.userId !== user.uid) {
         await addDoc(collection(db, 'users', parentComment.userId, 'notifications'), {
           type: 'reply',
           fromUserId: user.uid,
           fromUsername: currentUsername,
           postId: postId,
-          postTitle: posts.find(p => p.id === postId)?.title || 'a post',
-          commentText: parentComment.text,
+          postTitle: posts.find(p => p.id === postId)?.title,
           replyText: replyContent,
           timestamp: serverTimestamp()
         });
       }
-
+  
       setReplyToComment(null);
       setReplyContent('');
     } catch (error) {
-      console.error('Error posting reply:', error);
+      console.error("Error posting reply:", error);
     }
   };
 
-  const groupCommentsWithReplies = (comments) => {
-    if (!comments) return [];
-
-    const parentComments = comments.filter(comment => !comment.isReply);
+  const groupCommentsWithReplies = (comments = []) => {
+    if (!comments || !comments.length) return [];
+  
+    const processedComments = comments.map(comment => {
+      
+      const timestampValue = comment.timestamp?.toDate 
+        ? comment.timestamp.toDate().getTime()
+        : (comment.timestamp?.seconds ? comment.timestamp.seconds * 1000 : 
+           (comment.timestamp ? new Date(comment.timestamp).getTime() : Date.now()));
+  
+      const parentCommentIdValue = comment.parentCommentId?.toDate 
+        ? comment.parentCommentId.toDate().getTime()
+        : (comment.parentCommentId?.seconds ? comment.parentCommentId.seconds * 1000 : 
+           (comment.parentCommentId ? new Date(comment.parentCommentId).getTime() : null));
+  
+      return {
+        ...comment,
+        _timestampValue: timestampValue,
+        _parentCommentIdValue: parentCommentIdValue
+      };
+    });
+  
+    const parentComments = processedComments.filter(comment => !comment.isReply);
+    const replies = processedComments.filter(comment => comment.isReply);
+  
     return parentComments.map(parent => ({
       ...parent,
-      replies: comments.filter(reply =>
-        reply.isReply && reply.parentCommentId === (parent.timestamp?.toDate().getTime() || parent.timestamp)
-      )
-    }));
+      replies: replies.filter(reply => 
+        reply._parentCommentIdValue === parent._timestampValue
+      ).sort((a, b) => a._timestampValue - b._timestampValue)
+    })).sort((a, b) => b._timestampValue - a._timestampValue);
   };
-
   const handleImageChange = (e) => {
     if (e.target.files[0]) {
       const file = e.target.files[0];
@@ -814,11 +921,30 @@ function Home() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 <h3 className="text-lg font-medium text-gray-800 mt-4">
-                  {activeTab === 'following' ? 'No posts from people you follow' : 'No posts found'}
+                  {activeTab === 'following'
+                    ? followedUsers.length === 0
+                      ? "You're not following anyone yet"
+                      : "No posts from people you follow"
+                    : "No posts found"}
                 </h3>
                 <p className="text-gray-600 mt-1">
-                  {activeTab === 'following' ? 'Follow more people to see their posts' : 'Be the first to create a post!'}
+                  {activeTab === 'following'
+                    ? followedUsers.length === 0
+                      ? "Follow some users to see their posts here"
+                      : "The users you follow haven't posted anything yet"
+                    : selectedCategory
+                      ? `No posts in the ${selectedCategory} category`
+                      : "Be the first to create a post!"}
                 </p>
+                {user && (
+                  <button
+                    onClick={() => setIsCreateModalOpen(true)}
+                    className="mt-4 bg-gradient-to-r from-teal-600 to-teal-600 hover:from-teal-700 hover:to-teal-700 text-white px-6 py-2 rounded-lg font-bold transition-all shadow-md hover:shadow-lg inline-flex items-center"
+                  >
+                    <PencilSquareIcon className="h-5 w-5 mr-2" />
+                    Create Your First Post
+                  </button>
+                )}
               </div>
             ) : (
               posts.map((post) => (
@@ -828,7 +954,7 @@ function Home() {
                   className="bg-white rounded-2xl p-6 shadow-lg hover:shadow-xl transition-shadow border border-gray-100"
                 >
                   <ViewTracker postId={post.id} />
-                  
+
                   <div className="flex justify-between items-start mb-4">
                     <div className="flex items-center space-x-3">
                       <UserCircleIcon className="h-10 w-10 text-teal-600" />
@@ -889,31 +1015,24 @@ function Home() {
 
                       <button
                         onClick={() => setSelectedPostIdForComments(selectedPostIdForComments === post.id ? null : post.id)}
-                        className={`flex items-center space-x-1 ${selectedPostIdForComments === post.id ? 'text-teal-600' : 'text-gray-500 hover:text-indigo-600'} transition`}
+                        className={`flex items-center space-x-1 ${selectedPostIdForComments === post.id ? 'text-teal-600' : 'text-gray-500 hover:text-teal-600'} transition`}
                       >
                         <ChatBubbleLeftIcon className="h-6 w-6" />
                         <span className="font-medium">{post.comments ? post.comments.length : 0}</span>
                       </button>
 
-                      <div className="flex items-center space-x-1 text-gray-500 hover:text-blue-500 transition" 
-                          title={`${post.viewedBy?.length || 0} unique viewers`}>
-                        <EyeIcon className="h-6 w-6" />
-                        <span className="font-medium">{post.views || 0}</span>
-                      </div>
-
-                      <button
-                        onClick={() => handleSave(post.id)}
-                        className="flex items-center space-x-1 text-gray-500 hover:text-yellow-500 transition"
-                      >
-                        <BookmarkIcon className="h-6 w-6" />
-                      </button>
-
-                      <button
-                        onClick={() => handleShare(post.id)}
+                      <div
                         className="flex items-center space-x-1 text-gray-500 hover:text-teal-600 transition"
+                        title={`${post.viewedBy?.length || 0} unique viewers (${post.views || 0} total views)`}
                       >
-                        <ShareIcon className="h-6 w-6" />
-                      </button>
+                        <EyeIcon className="h-6 w-6" />
+                        <span className="font-medium">
+                          {post.viewedBy?.length || 0}
+                          {post.views > post.viewedBy?.length && (
+                            <span className="text-xs opacity-75 ml-1"></span>
+                          )}
+                        </span>
+                      </div>
                     </div>
 
                     {user && user.uid !== post.userId && (
@@ -941,45 +1060,55 @@ function Home() {
                           groupCommentsWithReplies(post.comments).map((comment, index) => (
                             <div key={index} className="bg-gray-50 p-3 rounded-lg relative">
                               <div className="flex items-center space-x-2 mb-1">
-                                <UserCircleIcon className="h-5 w-5 text-teal-500" />
+                                <UserCircleIcon className="h-5 w-5 text-teal-600" />
                                 <p className="font-semibold text-teal-600">{comment.userName}</p>
                               </div>
                               <p className="text-gray-700 pl-7">{comment.text}</p>
-                              <p className="text-xs text-gray-500 text-right mt-1">
-                                {new Date(comment.timestamp?.toDate()).toLocaleTimeString()}
-                              </p>
+                              <div className="flex justify-between items-center mt-1">
+                                <p className="text-xs text-gray-500">
+                                  {new Date(comment._timestampValue).toLocaleString()}
+                                </p>
+                                <div className="flex items-center space-x-2">
+                                  <button
+                                    onClick={() => {
+                                      setReplyToComment(comment);
+                                      setReplyContent('');
+                                    }}
+                                    className="text-xs text-gray-500 hover:text-teal-600"
+                                  >
+                                    Reply
+                                  </button>
+                                  {(user?.uid === comment.userId || user?.uid === post.userId) && (
+                                    <button
+                                      onClick={() => handleDeleteComment(post.id, comment)}
+                                      className="text-gray-400 hover:text-red-500 text-xs"
+                                      title="Delete comment"
+                                    >
+                                      <TrashIcon className="h-4 w-4" />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
 
-                              <button
-                                onClick={() => setReplyToComment(replyToComment?.parentCommentId === comment.timestamp?.toDate().getTime() ? null : comment)}
-                                className="absolute bottom-2 right-10 text-xs text-gray-500 hover:text-teal-600"
-                              >
-                                Reply
-                              </button>
-
-                              {(user?.uid === comment.userId || user?.uid === post.userId) && (
-                                <button
-                                  onClick={() => handleDeleteComment(post.id, comment)}
-                                  className="absolute top-2 right-2 text-gray-400 hover:text-red-500 text-xs"
-                                  title="Delete comment"
-                                >
-                                  <TrashIcon className="h-4 w-4" />
-                                </button>
-                              )}
-
-                              {replyToComment?.parentCommentId === comment.timestamp?.toDate().getTime() && (
+                              {replyToComment?._timestampValue === comment._timestampValue && (
                                 <div className="mt-3 pl-7">
-                                  <div className="flex space-x-2">
+                                  <div className="flex gap-2">
                                     <input
                                       type="text"
                                       placeholder={`Reply to ${comment.userName}...`}
                                       value={replyContent}
                                       onChange={(e) => setReplyContent(e.target.value)}
-                                      className="flex-1 px-3 py-1 text-sm border border-gray-300 rounded-lg"
+                                      className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500"
+                                      autoFocus
                                     />
                                     <button
                                       onClick={() => handleReply(post.id, comment)}
                                       disabled={!replyContent.trim()}
-                                      className={`px-3 py-1 text-sm rounded-lg ${replyContent.trim() ? 'bg-teal-600 text-white' : 'bg-gray-200 text-gray-500'}`}
+                                      className={`px-3 py-2 text-sm rounded-lg ${
+                                        replyContent.trim()
+                                          ? "bg-teal-600 text-white hover:bg-teal-700"
+                                          : "bg-gray-200 text-gray-400"
+                                      }`}
                                     >
                                       Post
                                     </button>
@@ -987,36 +1116,44 @@ function Home() {
                                 </div>
                               )}
 
-                              {comment.replies?.length > 0 && (
-                                <div className="mt-2 ml-6 space-y-2 border-l-2 border-gray-200 pl-3">
-                                  {comment.replies.map((reply, replyIndex) => (
-                                    <div key={replyIndex} className="bg-gray-100 p-2 rounded-lg relative">
-                                      <div className="flex items-center space-x-2">
-                                        <UserCircleIcon className="h-4 w-4 text-teal-500" />
-                                        <p className="text-xs font-semibold text-teal-600">{reply.userName}</p>
-                                      </div>
-                                      <p className="text-xs text-gray-700 pl-6">{reply.text}</p>
-                                      <p className="text-xxs text-gray-500 text-right mt-1">
-                                        {new Date(reply.timestamp?.toDate()).toLocaleTimeString()}
+                              {comment.replies?.map((reply) => (
+                                <div key={reply._timestampValue} className="mt-2 ml-6 pl-3 border-l-2 border-teal-100">
+                                  <div className="bg-gray-50 p-3 rounded-lg">
+                                    <div className="flex items-center space-x-2">
+                                      <UserCircleIcon className="h-4 w-4 text-teal-500" />
+                                      <p className="text-xs font-semibold text-teal-600">
+                                        {reply.userName}
+                                        {reply.repliedTo && (
+                                          <span className="text-gray-500 text-xs ml-1">
+                                            → {reply.repliedTo.userName}
+                                          </span>
+                                        )}
+                                      </p>
+                                    </div>
+                                    <p className="text-xs text-gray-700 pl-6">{reply.text}</p>
+                                    <div className="flex justify-between items-center mt-1">
+                                      <p className="text-[0.6rem] text-gray-500">
+                                        {new Date(reply._timestampValue).toLocaleTimeString()}
                                       </p>
                                       {(user?.uid === reply.userId || user?.uid === post.userId) && (
                                         <button
                                           onClick={() => handleDeleteComment(post.id, reply)}
-                                          className="absolute top-1 right-1 text-gray-400 hover:text-red-500 text-xxs"
-                                          title="Delete reply"
+                                          className="text-gray-400 hover:text-red-500"
                                         >
                                           <TrashIcon className="h-3 w-3" />
                                         </button>
                                       )}
                                     </div>
-                                  ))}
+                                  </div>
                                 </div>
-                              )}
+                              ))}
                             </div>
                           ))
                         ) : (
                           <div className="text-center py-4 bg-gray-50 rounded-lg">
-                            <p className="text-gray-500 italic">No comments yet. Be the first to comment!</p>
+                            <p className="text-gray-500 italic">
+                              No comments yet. Be the first to comment!
+                            </p>
                           </div>
                         )}
                       </div>
@@ -1035,7 +1172,10 @@ function Home() {
                             <button
                               onClick={() => handleComment(post.id, commentInput)}
                               disabled={!commentInput.trim()}
-                              className={`px-4 py-2 rounded-lg font-medium transition ${commentInput.trim() ? 'bg-teal-600 text-white hover:bg-teal-700' : 'bg-gray-200 text-gray-500 cursor-not-allowed'}`}
+                              className={`px-4 py-2 rounded-lg font-medium transition ${commentInput.trim()
+                                  ? "bg-teal-600 text-white hover:bg-teal-700"
+                                  : "bg-gray-200 text-gray-500 cursor-not-allowed"
+                                }`}
                             >
                               Post
                             </button>

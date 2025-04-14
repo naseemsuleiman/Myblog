@@ -34,7 +34,7 @@ function Login() {
         return;
       }
 
-      // Regular user login flow
+      
       const userCredential = await handleLogin(email, password);
       const user = userCredential.user;
 

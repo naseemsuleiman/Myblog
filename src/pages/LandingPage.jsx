@@ -12,7 +12,7 @@ const LandingPage = () => {
     if (user) navigate("/home");
   }, [user, navigate]);
 
-  // Function to handle viewing posts
+  
   const handleViewPosts = () => {
     navigate("/posts");
   };
@@ -134,41 +134,7 @@ const LandingPage = () => {
         </div>
       </section>
 
-      
-      <section className="py-20 px-6 bg-gray-50">
-        <div className="max-w-7xl mx-auto">
-          <h2 className="text-3xl font-bold text-center mb-16 text-gray-900">
-            What <span className="text-teal-500">Writers Say</span>
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {[
-              {
-                quote: "Inkify helped me triple my readership in just three months. The community is incredible.",
-                author: "Sarah J., Fiction Writer",
-                role: "Published 3 novels"
-              },
-              {
-                quote: "Finally a platform that treats writers as professionals. The monetization tools are game-changing.",
-                author: "Michael T., Journalist",
-                role: "15 years experience"
-              },
-              {
-                quote: "The clean interface removes all distractions. I've never been more productive.",
-                author: "Priya K., Poet",
-                role: "2 poetry collections"
-              }
-            ].map((testimonial, index) => (
-              <div key={index} className="bg-white p-8 rounded-xl shadow-sm hover:shadow-md transition-shadow">
-                <div className="text-gray-900 text-lg mb-6">"{testimonial.quote}"</div>
-                <div className="border-t pt-4">
-                  <p className="font-semibold text-gray-900">{testimonial.author}</p>
-                  <p className="text-gray-500 text-sm">{testimonial.role}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+   
 
      
       <section className="py-20 px-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white">

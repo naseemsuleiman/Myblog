@@ -12,7 +12,7 @@ import Profile from "./components/Profile";
 import Dashboard from "./Admin/Dashboard";
 import PublicPostsPage from "./components/PublicPostPage";
 import UserStats from "./components/UserStats";
-import Settings from "./components/Settings";
+
 
 
 function AppRoutes() {
@@ -38,8 +38,9 @@ function AppRoutes() {
           element={user ? <Home /> : <Navigate to="/" />} 
         />
         <Route path="/profile" element={<Profile />} />
+        <Route path="/profile/:userId" element={<Profile />} />
         <Route path="/stats" element={<UserStats />} />
-        <Route path="/settings" element={<Settings />} />
+        
 
         
         

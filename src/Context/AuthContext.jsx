@@ -1,8 +1,8 @@
 import { createContext, useContext, useEffect, useState } from 'react';
-import { auth, loginWithEmail, signUpWithEmail, onAuthStateChangedListener } from '../firebase';
+import { auth, loginWithEmail, signUpWithEmail, onAuthStateChangedListener,db } from '../firebase';
 
-import { signOut } from 'firebase/auth'; 
-
+import { signOut,updateProfile,updateEmail,updatePassword,reauthenticateWithCredential,EmailAuthProvider,deleteUser } from 'firebase/auth'; 
+import { doc, updateDoc, getDoc, deleteDoc } from 'firebase/firestore';
 
 
 
@@ -67,6 +67,116 @@ export function AuthProvider({ children }){
             console.error('Logout error:', error);
         }
     };
+    const updateUserProfile = async (displayName, bio) => {
+        try {
+            setLoading(true);
+            
+            
+            await updateProfile(auth.currentUser, {
+                displayName: displayName
+            });
+
+         
+            await updateDoc(doc(db, 'users', user.uid), {
+                displayName,
+                bio,
+                updatedAt: new Date()
+            });
+
+           
+            setUser({ ...user, displayName });
+            return true;
+        } catch (error) {
+            console.error('Error updating profile:', error);
+            setError('Failed to update profile: ' + error.message);
+            return false;
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const updateUserEmail = async (newEmail, currentPassword) => {
+        try {
+            setLoading(true);
+            
+         
+            const credential = EmailAuthProvider.credential(
+                user.email,
+                currentPassword
+            );
+            await reauthenticateWithCredential(auth.currentUser, credential);
+
+            await updateEmail(auth.currentUser, newEmail);
+
+           
+            await updateDoc(doc(db, 'users', user.uid), {
+                email: newEmail,
+                updatedAt: new Date()
+            });
+
+           
+            setUser({ ...user, email: newEmail });
+            return true;
+        } catch (error) {
+            console.error('Error updating email:', error);
+            setError('Failed to update email: ' + error.message);
+            return false;
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const updateUserPassword = async (newPassword, currentPassword) => {
+        try {
+            setLoading(true);
+            
+           
+            const credential = EmailAuthProvider.credential(
+                user.email,
+                currentPassword
+            );
+            await reauthenticateWithCredential(auth.currentUser, credential);
+
+            
+            await updatePassword(auth.currentUser, newPassword);
+            return true;
+        } catch (error) {
+            console.error('Error updating password:', error);
+            setError('Failed to update password: ' + error.message);
+            return false;
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const deleteUserAccount = async (currentPassword) => {
+        try {
+            setLoading(true);
+            
+          
+            const credential = EmailAuthProvider.credential(
+                user.email,
+                currentPassword
+            );
+            await reauthenticateWithCredential(auth.currentUser, credential);
+
+           
+            await deleteDoc(doc(db, 'users', user.uid));
+
+           
+            await deleteUser(auth.currentUser);
+
+            await handleLogout();
+            setUser(null);
+            return true;
+        } catch (error) {
+            console.error('Error deleting account:', error);
+            setError('Failed to delete account: ' + error.message);
+            return false;
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const value = {
         user,
@@ -79,6 +189,10 @@ export function AuthProvider({ children }){
         handleLogin,
         handleSignup,
         handleLogout,
+        updateUserProfile,
+        updateUserEmail,
+        updateUserPassword,
+        deleteUserAccount,
         clearError: () => setError(null)
     };
 

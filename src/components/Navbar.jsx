@@ -53,14 +53,7 @@ function Navbar() {
             </Link>
           
           
-            <Link
-                to="/settings"
-                className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
-                onClick={() => setIsDropdownOpen(false)}
-            >
-                <Cog6ToothIcon className="h-4 w-4 mr-2" />
-                Settings
-            </Link>
+         
             <button
                 onClick={handleLogoutNav}
                 className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"

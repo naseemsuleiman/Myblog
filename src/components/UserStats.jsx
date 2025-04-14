@@ -1,12 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import { auth, db } from '../firebase';
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, updateDoc, increment } from 'firebase/firestore';
 import { Bar } from 'react-chartjs-2';
-import Chart from 'chart.js/auto'; // Import Chart.js
+import Chart from 'chart.js/auto';
 
 function UserStats() {
     const [postStats, setPostStats] = useState([]);
     const [loading, setLoading] = useState(true);
+
+   
+    const trackView = async (postId) => {
+        const currentUser = auth.currentUser;
+        if (!currentUser) return; 
+        
+        const postRef = doc(db, 'posts', postId);
+        
+       
+        await updateDoc(postRef, {
+            views: increment(1),
+            viewedBy: arrayUnion(currentUser.uid) 
+        });
+    };
 
     useEffect(() => {
         const currentUser = auth.currentUser;
@@ -17,18 +31,21 @@ function UserStats() {
 
         const postsQuery = query(collection(db, 'posts'), where('userId', '==', currentUser.uid));
         const unsubscribe = onSnapshot(postsQuery, (snapshot) => {
-            const postsData = snapshot.docs.map((doc) => ({
-                id: doc.id,
-                title: doc.data().title,
-                likes: doc.data().likes?.length || 0,
-                comments: doc.data().comments?.length || 0,
-                views: doc.data().views || 0,
-            }));
+            const postsData = snapshot.docs.map((doc) => {
+                const data = doc.data();
+                return {
+                    id: doc.id,
+                    title: data.title,
+                    likes: data.likes?.length || 0,
+                    comments: data.comments?.length || 0,
+                    views: data.viewedBy ? data.viewedBy.length : 0, 
+                };
+            });
             setPostStats(postsData);
             setLoading(false);
         });
 
-        return () => unsubscribe(); // Cleanup listener
+        return () => unsubscribe();
     }, []);
 
     if (loading) {
@@ -57,9 +74,9 @@ function UserStats() {
                 data: postStats.map((post) => post.comments),
             },
             {
-                label: 'Views',
-                backgroundColor: 'rgba(255, 206, 86, 0.6)',
-                borderColor: 'rgba(255, 206, 86, 1)',
+                label: 'Unique Views',
+                backgroundColor: 'rgba(75, 192, 192, 0.6)',
+                borderColor: 'rgba(75, 192, 192, 1)',
                 borderWidth: 1,
                 data: postStats.map((post) => post.views),
             },
@@ -67,6 +84,7 @@ function UserStats() {
     };
 
     const chartOptions = {
+        responsive: true,
         scales: {
             y: {
                 beginAtZero: true,
@@ -87,21 +105,35 @@ function UserStats() {
                 display: true,
                 position: 'top',
             },
+            tooltip: {
+                callbacks: {
+                    label: function(context) {
+                        return `${context.dataset.label}: ${context.raw}`;
+                    }
+                }
+            }
         },
     };
 
     return (
         <div className="min-h-screen bg-gray-100 py-8">
             <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-                <h1 className="text-3xl font-bold text-gray-900 mb-8">Your Post Interactions</h1>
+                <h1 className="text-3xl font-bold text-gray-900 mb-8">Your Post Performance</h1>
 
                 {postStats.length === 0 ? (
                     <div className="bg-white rounded-lg shadow p-8 text-center">
-                        <p className="text-gray-500 text-lg">You haven't posted anything yet, so there are no interaction statistics.</p>
+                        <p className="text-gray-500 text-lg">You haven't posted anything yet.</p>
                     </div>
                 ) : (
-                    <div className="bg-white rounded-lg shadow p-8">
-                        <Bar data={chartData} options={chartOptions} />
+                    <div className="bg-white rounded-lg shadow p-6">
+                        <div className="mb-4">
+                            <p className="text-gray-600 text-sm">
+                                <span className="font-semibold">Note:</span> Views represent unique users who have seen your post.
+                            </p>
+                        </div>
+                        <div className="h-96">
+                            <Bar data={chartData} options={chartOptions} />
+                        </div>
                     </div>
                 )}
             </div>

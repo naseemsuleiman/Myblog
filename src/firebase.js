@@ -7,7 +7,7 @@ import {
   signOut
 } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
-import { getStorage } from "firebase/storage"; // Import getStorage
+import { getStorage } from "firebase/storage"; 
 
 const firebaseConfig = {
   apiKey: "AIzaSyBkNJuthLKc2zhqlFWWwnpJbQYdsfFsQNA",
@@ -21,7 +21,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const storage = getStorage(app); // Initialize and export storage
+const storage = getStorage(app); 
 
 export const loginWithEmail = (email, password) => {
   return signInWithEmailAndPassword(auth, email, password);
@@ -38,5 +38,14 @@ export const handleLogout = () => {
 export const onAuthStateChangedListener = (callback) => {
   return onAuthStateChanged(auth, callback);
 };
-
+export const updateUserProfile = async (userId, data) => {
+  try {
+    const userDocRef = doc(db, 'users', userId);
+    await updateDoc(userDocRef, data);
+    return { success: true, message: 'Profile updated successfully!' };
+  } catch (error) {
+    console.error('Error updating user profile:', error);
+    return { success: false, message: 'Failed to update profile: ' + error.message };
+  }
+};
 export { db, auth, storage }; 

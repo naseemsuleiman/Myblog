@@ -5,7 +5,7 @@ import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearSca
 import { Pie } from 'react-chartjs-2';
 import { useNavigate } from 'react-router-dom';
 
-import { TrashIcon, NoSymbolIcon as BanIcon, CheckIcon, UserIcon,PencilSquareIcon, DocumentTextIcon, ChatBubbleLeftIcon as ChatAltIcon, HeartIcon } from '@heroicons/react/24/outline';
+import { TrashIcon, NoSymbolIcon as BanIcon, CheckIcon, UserIcon, PencilSquareIcon, DocumentTextIcon, ChatBubbleLeftIcon as ChatAltIcon, HeartIcon } from '@heroicons/react/24/outline';
 import { useAuth } from '../Context/AuthContext';
 import Chart from './Chart';
 
@@ -33,8 +33,9 @@ const Dashboard = () => {
             try {
                 setLoading(true);
 
-               
+
                 const usersSnapshot = await getDocs(collection(db, 'users'));
+
                 const usersData = usersSnapshot.docs.map(doc => {
                     const data = doc.data();
                     return {
@@ -44,8 +45,9 @@ const Dashboard = () => {
                         userName: data.userName || data.email?.split('@')[0] || 'Unknown'
                     };
                 }).filter(user => user.email !== 'admin@gmail.com');
+                console.log('usersdata', usersSnapshot.docs.map(doc => doc.data()))
 
-                
+
                 const postsQuery = query(collection(db, 'posts'), orderBy('timestamp', 'desc'));
                 const postsSnapshot = await getDocs(postsQuery);
                 const postsData = postsSnapshot.docs.map(doc => {
@@ -57,7 +59,7 @@ const Dashboard = () => {
                     };
                 });
 
-                
+
                 let allComments = [];
                 postsData.forEach(post => {
                     if (post.comments && Array.isArray(post.comments)) {
@@ -98,47 +100,45 @@ const Dashboard = () => {
         fetchData();
     }, []);
 
-    
+
     const convertToDate = (timestamp) => {
         if (!timestamp) return null;
         if (typeof timestamp.toDate === 'function') return timestamp.toDate();
         if (timestamp.seconds) return new Date(timestamp.seconds * 1000);
-        return timestamp; 
+        return timestamp;
     };
 
-   
+
     const formatDate = (date) => {
         if (!date) return 'N/A';
-        if (date instanceof Date) return date.toLocaleDateString();
+
+
+        if (date.toDate && typeof date.toDate === 'function') {
+            return date.toDate().toLocaleDateString();
+        }
+
+
+        if (date instanceof Date) {
+            return date.toLocaleDateString();
+        }
+
+
+        if (typeof date === 'string' || typeof date === 'number') {
+            return new Date(date).toLocaleDateString();
+        }
+
+        console.warn('Unrecognized date format:', date);
         return 'Invalid Date';
     };
+    { console.log('Full user object:', user) }
 
-    const handleBanUser = async (userId) => {
-        try {
-            await updateDoc(doc(db, 'users', userId), { isBanned: true });
-            setUsers(users.map(user => user.id === userId ? { ...user, isBanned: true } : user));
-            setStats(prev => ({ ...prev, activeUsers: prev.activeUsers - 1, bannedUsers: prev.bannedUsers + 1 }));
-        } catch (error) {
-            console.error('Error banning user:', error);
-        }
-    };
-
-    const handleUnbanUser = async (userId) => {
-        try {
-            await updateDoc(doc(db, 'users', userId), { isBanned: false });
-            setUsers(users.map(user => user.id === userId ? { ...user, isBanned: false } : user));
-            setStats(prev => ({ ...prev, activeUsers: prev.activeUsers + 1, bannedUsers: prev.bannedUsers - 1 }));
-        } catch (error) {
-            console.error('Error unbanning user:', error);
-        }
-    };
 
     const handleDeletePost = async (postId) => {
         try {
             await deleteDoc(doc(db, 'posts', postId));
             setPosts(posts.filter(post => post.id !== postId));
             setStats(prev => ({ ...prev, totalPosts: prev.totalPosts - 1 }));
-           
+
             setComments(comments.filter(comment => comment.postId !== postId));
         } catch (error) {
             console.error('Error deleting post:', error);
@@ -151,13 +151,13 @@ const Dashboard = () => {
             await updateDoc(postRef, {
                 comments: arrayRemove(commentToDelete)
             });
-            
-            setComments(comments.filter(comment => 
-                !(comment.postId === postId && 
-                  comment.timestamp === commentToDelete.timestamp && 
-                  comment.userId === commentToDelete.userId)
+
+            setComments(comments.filter(comment =>
+                !(comment.postId === postId &&
+                    comment.timestamp === commentToDelete.timestamp &&
+                    comment.userId === commentToDelete.userId)
             ));
-            
+
             setStats(prev => ({ ...prev, totalComments: prev.totalComments - 1 }));
         } catch (error) {
             console.error('Error deleting comment:', error);
@@ -178,6 +178,19 @@ const Dashboard = () => {
                 console.error('Logout or navigation error:', error);
             });
     };
+    const deleteUser = async (userId) => {
+        if (window.confirm('Are you sure you want to permanently delete this user?')) {
+          try {
+            const deleteUserFunction = httpsCallable(functions, 'deleteUser');
+            await deleteUserFunction({ userId });
+            alert('User deleted successfully');
+           
+            setUsers(users.filter(user => user.id !== userId));
+          } catch (error) {
+            alert(`Error: ${error.message}`);
+          }
+        }
+      };
 
     const postEngagementData = {
         labels: ['Posts', 'Likes'],
@@ -187,13 +200,14 @@ const Dashboard = () => {
     if (loading) {
         return <div className="flex items-center justify-center min-h-screen bg-gray-50"><div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500"></div></div>;
     }
+    console.log('users', users)
 
     return (
-      
+
         <div className="min-h-screen bg-gray-50">
             <div className="fixed inset-y-0 left-0 w-64 bg-white shadow-lg">
                 <div className="flex items-center justify-center h-16 px-4 bg-teal-600">
-                  <PencilSquareIcon className="h-8 w-8 text-white" />
+                    <PencilSquareIcon className="h-8 w-8 text-white" />
                     <h1 className="text-white font-bold text-xl">Inkify Admin</h1>
                 </div>
                 <nav className="p-4">
@@ -227,7 +241,7 @@ const Dashboard = () => {
             <div className="ml-64 p-8">
                 {activeTab === 'dashboard' && (
                     <div>
-                      <Chart/>
+                        <Chart />
                         <h2 className="text-2xl font-bold text-gray-800 mb-6">Dashboard Overview</h2>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
                             <div className="bg-white p-6 rounded-xl shadow">
@@ -276,19 +290,16 @@ const Dashboard = () => {
                             </div>
                         </div>
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-                            
-                            
-                            <div className="bg-white p-6 rounded-xl shadow ">
-                                <h3 className="text-lg font-semibold mb-4">User Status</h3>
-                                <div className="h-64">
-                                    <Pie data={userStatusData}  />
-                                </div>
-                            </div>
-                        </div>
-                       
+
+
+                           
                                 
-                            
-                       
+                           
+                        </div>
+
+
+
+
                     </div>
                 )}
                 {activeTab === 'users' && (
@@ -306,9 +317,9 @@ const Dashboard = () => {
                                     <tr>
                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Joined</th>
+                                        {/* <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Joined</th> */}
                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                        
                                     </tr>
                                 </thead>
                                 <tbody className="bg-white divide-y divide-gray-200">
@@ -325,25 +336,15 @@ const Dashboard = () => {
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{user.email}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                                {formatDate(user.createdAt)}
-                                            </td>
+                                            {/* <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                {formatDate(user.timestamp)}
+                                            </td> */}
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${user.isBanned ? 'bg-red-100 text-teal-800' : 'bg-teal-100 text-green-800'}`}>
                                                     {user.isBanned ? 'Banned' : 'Active'}
                                                 </span>
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                                {user.isBanned ? (
-                                                    <button onClick={() => handleUnbanUser(user.id)} className="text-green-600 hover:text-teal-900 mr-4">
-                                                        <CheckIcon className="h-5 w-5" />
-                                                    </button>
-                                                ) : (
-                                                    <button onClick={() => handleBanUser(user.id)} className="text-red-600 hover:text-red-900 mr-4">
-                                                        <BanIcon className="h-5 w-5" />
-                                                    </button>
-                                                )}
-                                            </td>
+                                          
                                         </tr>
                                     ))}
                                 </tbody>
@@ -439,8 +440,8 @@ const Dashboard = () => {
                                                 {formatDate(comment.timestamp)}
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                                <button 
-                                                    onClick={() => handleDeleteComment(comment.postId, comment)} 
+                                                <button
+                                                    onClick={() => handleDeleteComment(comment.postId, comment)}
                                                     className="text-red-600 hover:text-teal-900"
                                                 >
                                                     <TrashIcon className="h-5 w-5" />
