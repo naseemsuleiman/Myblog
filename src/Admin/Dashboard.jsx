@@ -180,18 +180,19 @@ const Dashboard = () => {
     };
     const deleteUser = async (userId) => {
         if (window.confirm('Are you sure you want to permanently delete this user?')) {
-          try {
-            const deleteUserFunction = httpsCallable(functions, 'deleteUser');
-            await deleteUserFunction({ userId });
-            alert('User deleted successfully');
-           
-            setUsers(users.filter(user => user.id !== userId));
-          } catch (error) {
-            alert(`Error: ${error.message}`);
-          }
+            try {
+                
+                await deleteDoc(doc(db, 'users', userId));
+                
+               
+                setUsers(prevUsers => prevUsers.filter(user => user.id !== userId));
+                
+                alert('User deleted successfully');
+            } catch (error) {
+                alert(`Error: ${error.message}`);
+            }
         }
-      };
-
+    };
     const postEngagementData = {
         labels: ['Posts', 'Likes'],
         datasets: [{ label: 'Post Engagement', data: [stats.totalPosts, stats.postLikes], backgroundColor: ['#3b82f6', '#ec4899'] }],

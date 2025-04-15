@@ -459,116 +459,157 @@ function Profile() {
             </div>
 
             {isModalOpen && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-                    <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-                        <div className="p-6">
-                            <div className="flex justify-between items-start mb-4">
-                                <h3 className="text-2xl font-bold text-gray-900">{selectedPost ? selectedPost.title : modalTitle}</h3>
-                                <button onClick={closePostModal} className="text-teal-600 hover:text-gray-600">
-                                    <XMarkIcon className="h-6 w-6" />
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+                <div className="flex justify-between items-start mb-4">
+                    <h3 className="text-2xl font-bold text-gray-900">
+                        {selectedPost ? selectedPost.title : modalTitle}
+                    </h3>
+                    <button 
+                        onClick={closePostModal} 
+                        className="text-teal-600 hover:text-gray-600"
+                    >
+                        <XMarkIcon className="h-6 w-6" />
+                    </button>
+                </div>
+
+                {selectedPost ? (
+                    <>
+                        <div className="text-sm text-gray-500 mb-4">
+                            Published on {formatDate(selectedPost.createdAt)}
+                        </div>
+
+                        {selectedPost.image && (
+                            <img 
+                                src={selectedPost.image} 
+                                alt={selectedPost.title} 
+                                className="w-full h-96 object-contain mb-6" 
+                            />
+                        )}
+
+                        {editingPostId === selectedPost.id ? (
+                            <div className="mb-4">
+                                <textarea
+                                    value={editedContent}
+                                    onChange={(e) => setEditedContent(e.target.value)}
+                                    className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    rows="10"
+                                />
+                                <div className="flex justify-end space-x-3 mt-3">
+                                    <button
+                                        onClick={() => setEditingPostId(null)}
+                                        className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition-colors"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={() => handleSaveEdit(selectedPost.id)}
+                                        className="px-4 py-2 bg-teal-600 text-white rounded-md hover:bg-teal-700 transition-colors"
+                                    >
+                                        Save Changes
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <p className="text-gray-700 mb-6 whitespace-pre-line">
+                                {selectedPost.content}
+                            </p>
+                        )}
+
+                        <div className="flex items-center justify-between border-t border-gray-100 pt-4">
+                            <div className="flex items-center space-x-4">
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleLike(selectedPost.id);
+                                    }}
+                                    className={`flex items-center space-x-1 ${
+                                        selectedPost.likes?.includes(currentUser?.uid) 
+                                            ? 'text-red-500' 
+                                            : 'text-gray-400 hover:text-red-500'
+                                    } transition-colors`}
+                                >
+                                    <HeartIcon className="h-5 w-5" />
+                                    <span>{selectedPost.likes?.length || 0}</span>
+                                </button>
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        navigate(`/post/${selectedPost.id}`);
+                                    }}
+                                    className="flex items-center space-x-1 text-gray-400 hover:text-blue-500 transition-colors"
+                                >
+                                    <ChatBubbleLeftIcon className="h-5 w-5" />
+                                    <span>{selectedPost.comments?.length || 0}</span>
                                 </button>
                             </div>
 
-                            {selectedPost ? (
-                                <>
-                                    <div className="text-sm text-gray-500 mb-4">
-                                        Published on {formatDate(selectedPost.createdAt)}
-                                    </div>
-
-                                    {selectedPost.image && (
-                                        <img src={selectedPost.image} alt={selectedPost.title} className="w-full h-96 object-contain mb-6" />
-                                    )}
-
-                                    {editingPostId === selectedPost.id ? (
-                                        <div className="mb-4">
-                                            <textarea
-                                                value={editedContent}
-                                                onChange={(e) => setEditedContent(e.target.value)}
-                                                className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                                rows="10"
-                                            />
-                                            <div className="flex justify-end space-x-3 mt-3">
-                                                <button
-                                                    onClick={() => setEditingPostId(null)}
-                                                    className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition-colors"
-                                                >
-                                                    Cancel
-                                                </button>
-                                                <button
-                                                    onClick={() => handleSaveEdit(selectedPost.id)}
-                                                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-                                                >
-                                                    Save Changes
-                                                </button>
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <p className="text-gray-700 mb-6 whitespace-pre-line">{selectedPost.content}</p>
-                                    )}
-
-                                    <div className="flex items-center justify-between border-t border-gray-100 pt-4">
-                                        <div className="flex items-center space-x-4">
-                                            <button
-                                                onClick={() => handleLike(selectedPost.id)}
-                                                className={`flex items-center space-x-1 ${selectedPost.likes?.includes(currentUser?.uid) ? 'text-red-500' : 'text-gray-400 hover:text-red-500'} transition-colors`}
-                                            >
-                                                <HeartIcon className="h-5 w-5" />
-                                                <span>{selectedPost.likes?.length || 0}</span>
-                                            </button>
-                                            <button
-                                                onClick={() => navigate(`/post/${selectedPost.id}`)}
-                                                className="flex items-center space-x-1 text-gray-400 hover:text-blue-500 transition-colors"
-                                            >
-                                                <ChatBubbleLeftIcon className="h-5 w-5" />
-                                                <span>{selectedPost.comments?.length || 0}</span>
-                                            </button>
-                                        </div>
-
-                                        {isCurrentUserProfile && currentUser && currentUser.uid === post.userId && (
-                                            <div className="flex space-x-2">
-                                                <button
-                                                    onClick={() => handleEditPost(selectedPost)}
-                                                    className="text-teal-600 hover:text-teal-900 transition-colors"
-                                                    aria-label="Edit post"
-                                                >
-                                                    <PencilIcon className="h-5 w-5" />
-                                                </button>
-                                                <button
-                                                    onClick={() => handleDeletePost(selectedPost.id)}
-                                                    className="text-gray-400 hover:text-red-600 transition-colors"
-                                                    aria-label="Delete post"
-                                                >
-                                                    <TrashIcon className="h-5 w-5" />
-                                                </button>
-                                            </div>
-                                        )}
-                                    </div>
-                                </>
-                            ) : (
-                                <div>
-                                    {modalContent.length === 0 ? (
-                                        <p>No users to display.</p>
-                                    ) : (
-                                        modalContent.map((user) => (
-                                            <div key={user.id} className="flex items-center space-x-4 mb-4 cursor-pointer" onClick={() => navigate(`/profile/${user.id}`)}>
-                                                <div className="h-10 w-10 rounded-full overflow-hidden">
-                                                    {user.profilePicture ? (
-                                                        <img src={user.profilePicture} alt={user.username} className="h-full w-full object-cover" />
-                                                    ) : (
-                                                        <UserCircleIcon className="h-full w-full text-gray-400" />
-                                                    )}
-                                                </div>
-                                                <p className="font-semibold">{user.username}</p>
-                                            </div>
-                                        ))
-                                    )}
+                            {/* Updated buttons with better conditional rendering */}
+                            {currentUser && selectedPost.userId === currentUser.uid && (
+                                <div className="flex space-x-2">
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setEditingPostId(selectedPost.id);
+                                            setEditedContent(selectedPost.content);
+                                        }}
+                                        className="text-teal-600 hover:text-teal-900 transition-colors"
+                                        aria-label="Edit post"
+                                    >
+                                        <PencilIcon className="h-5 w-5" />
+                                    </button>
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleDeletePost(selectedPost.id);
+                                        }}
+                                        className="text-gray-400 hover:text-red-600 transition-colors"
+                                        aria-label="Delete post"
+                                    >
+                                        <TrashIcon className="h-5 w-5" />
+                                    </button>
                                 </div>
                             )}
                         </div>
+                    </>
+                ) : (
+                    <div>
+                        {modalContent.length === 0 ? (
+                            <p>No users to display.</p>
+                        ) : (
+                            modalContent.map((user) => (
+                                <div 
+                                    key={user.id} 
+                                    className="flex items-center space-x-4 mb-4 cursor-pointer" 
+                                    onClick={() => {
+                                        closePostModal(); 
+                                        navigate(`/profile/${user.id}`);
+                                    }}
+                                >
+                                    <div className="h-10 w-10 rounded-full overflow-hidden">
+                                        {user.profilePicture ? (
+                                            <img 
+                                                src={user.profilePicture} 
+                                                alt={user.username} 
+                                                className="h-full w-full object-cover" 
+                                            />
+                                        ) : (
+                                            <UserCircleIcon className="h-full w-full text-gray-400" />
+                                        )}
+                                    </div>
+                                    <p className="font-semibold">{user.username}</p>
+                                </div>
+                            ))
+                        )}
                     </div>
-                </div>
-            )}
+                )}
+            </div>
         </div>
+    </div>
+    
+)}
+</div>
     );
 }
 

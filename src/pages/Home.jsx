@@ -73,7 +73,7 @@ function Home() {
   
       const trackView = async () => {
         try {
-          const postRef = doc(db, 'published', postId);
+          const postRef = doc(db, 'posts', postId); // Changed from 'published' to 'posts'
           const postSnap = await getDoc(postRef);
   
           if (!postSnap.exists()) {
@@ -106,7 +106,6 @@ function Home() {
   
     return null;
   };
-
   useEffect(() => {
     if (!user) {
       navigate('/posts');
@@ -348,7 +347,7 @@ function Home() {
       alert('Please fill all fields and sign in.');
       return;
     }
-
+  
     try {
       await addDoc(collection(db, 'posts'), {
         title,
@@ -357,17 +356,25 @@ function Home() {
         userId: user.uid,
         userName: currentUsername,
         category: selectedCategory || "General",
-        createdAt: serverTimestamp(),
+        timestamp: serverTimestamp(), // Changed from createdAt to timestamp
         likes: [],
         comments: [],
         views: 0,
         viewedBy: []
       });
+      
+      // Reset form and state
+      setActiveTab('all');
       setTitle('');
       setImageBase64('');
       setPostContent('');
       setSelectedCategory('');
       setIsCreateModalOpen(false);
+      
+      // Force refresh of posts
+      setPosts([]);
+      setLastVisible(null);
+      fetchPosts();
     } catch (error) {
       console.error('Error posting:', error);
       alert(`Failed to post: ${error.message}`);
