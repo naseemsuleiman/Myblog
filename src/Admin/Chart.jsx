@@ -123,36 +123,54 @@ const Chart = () => {
     fetchData();
   }, [timeRange]);
 
-  const groupByTimePeriod = (data, period) => {
+  const groupByTimePeriod = (data, period, timeRange) => {
     const groups = {};
-
+  
     data.forEach(item => {
       const date = item.timestamp || item.createdAt;
       let key;
-
+  
       if (period === 'day') {
         key = date.toLocaleDateString();
-      } else if (period === 'week') {
-        const weekNumber = Math.floor(date.getDate() / 7);
-        key = `Week ${weekNumber + 1}`;
-      } else if (period === 'month') {
-        const weekNumber = Math.floor((date.getDate() - 1) / 7);
-        key = `Week ${weekNumber + 1}`;
+      } 
+      else if (period === 'week') {
+       
+        if (timeRange === 'month') {
+          const dayOfMonth = date.getDate();
+          if (dayOfMonth <= 7) key = 'Week 1';
+          else if (dayOfMonth <= 14) key = 'Week 2';
+          else if (dayOfMonth <= 21) key = 'Week 3';
+          else key = 'Week 4';
+        } 
+       
+        else {
+          const oneJan = new Date(date.getFullYear(), 0, 1);
+          const weekNumber = Math.ceil((((date - oneJan) / 86400000) + oneJan.getDay() + 1) / 7);
+          key = `Week ${weekNumber}`;
+        }
+      } 
+      else if (period === 'month') {
+        key = date.toLocaleString('default', { month: 'short' });
       }
-
+  
       if (!groups[key]) {
         groups[key] = 0;
       }
       groups[key]++;
     });
-
+  
     return groups;
   };
 
   const prepareChartData = () => {
-    const userSignups = groupByTimePeriod(stats.users, timeRange === 'year' ? 'month' : (timeRange === 'month' ? 'month' : 'day'));
-    const postsCreated = groupByTimePeriod(stats.posts, timeRange === 'year' ? 'month' : (timeRange === 'month' ? 'month' : 'day'));
-    const commentsPosted = groupByTimePeriod(stats.comments, timeRange === 'year' ? 'month' : (timeRange === 'month' ? 'month' : 'day'));
+    let period;
+    if (timeRange === 'year') period = 'month';
+    else if (timeRange === 'month') period = 'week';  
+    else period = 'day';  
+  
+    const userSignups = groupByTimePeriod(stats.users, period, timeRange);
+    const postsCreated = groupByTimePeriod(stats.posts, period, timeRange);
+    const commentsPosted = groupByTimePeriod(stats.comments, period, timeRange);
 
     const categories = {};
     stats.posts.forEach(post => {
