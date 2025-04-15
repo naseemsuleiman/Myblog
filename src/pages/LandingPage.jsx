@@ -173,34 +173,7 @@ const LandingPage = () => {
             <p className="text-gray-400">The professional writing platform for serious authors.</p>
           </div>
           <div>
-            <h4 className="font-bold text-lg mb-4">For Writers</h4>
-            <ul className="space-y-2">
-              {['Features', 'Pricing', 'Success Stories', 'Writing Resources'].map((item) => (
-                <li key={item}>
-                  <a href="#" className="text-gray-400 hover:text-teal-400 transition-colors">{item}</a>
-                </li>
-              ))}
-            </ul>
-          </div>
-          <div>
-            <h4 className="font-bold text-lg mb-4">Company</h4>
-            <ul className="space-y-2">
-              {['About', 'Blog', 'Careers', 'Press'].map((item) => (
-                <li key={item}>
-                  <a href="#" className="text-gray-400 hover:text-teal-400 transition-colors">{item}</a>
-                </li>
-              ))}
-            </ul>
-          </div>
-          <div>
-            <h4 className="font-bold text-lg mb-4">Legal</h4>
-            <ul className="space-y-2">
-              {['Terms', 'Privacy', 'Copyright', 'Guidelines'].map((item) => (
-                <li key={item}>
-                  <a href="#" className="text-gray-400 hover:text-teal-400 transition-colors">{item}</a>
-                </li>
-              ))}
-            </ul>
+           
           </div>
         </div>
         <div className="max-w-7xl mx-auto mt-12 pt-6 border-t border-gray-800 text-center text-gray-400">
